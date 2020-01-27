@@ -1,0 +1,166 @@
+---
+title: "ParticalMachineLeaning_couse4"
+output: html_document
+author: "Y.Yokota"
+date: "27/1/2020"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,cache = T, warning=FALSE)
+```
+
+### Overview
+
+This reports describes that 
+
+1.Preprocess
+  Remove the colums which includs  NA valume more than 80%. Also, check the zero convariates.
+2.Create prediction model.Be aware of multi-corrleation.
+  The methods of dicision tree,randam fores, and boosting will be used.
+
+3.Cross validation with training set. In sample versus out of sample error, prevent from overfitting. 
+
+4.The resons of the prediction model choice
+
+5.Test the data with the prediction model
+
+
+
+### Method
+
+The data was obtained from following Websites.
+  The training data for this project are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+  The test data are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+  The data for this project come from this source:   http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+  
+
+### Results
+
+# install library
+```{r}
+library(caret)
+library(ISLR)
+library(rattle)
+library(doParallel)
+library(tictoc)
+library(e1071)
+
+```
+
+# set the traing/test data.
+
+```{r}
+
+  train<-read.csv("/Users/yuki/Documents/R/Cousera_PML/pml-training.csv",header = T,na.strings = c("#DIV/0!","","NA"))
+  test<-read.csv("/Users/yuki/Documents/R/Cousera_PML/pml-testing.csv",header = T,na.strings= c("#DIV/0!","","NA"))
+
+```
+
+# remove the colums which includs  NA valume more than 80%.
+
+```{r}
+# Following colum names are improtant for later analyisis.
+  y1<-names(train[c(1:7,160)])
+
+na.ratio<-function(x){sum(is.na(x)=="TRUE")/length(x)}
+  y<-apply(train[,-c(1:7,160)],2,na.ratio)
+  y2<-names(subset(y,y<0.8))
+
+train2<-data.frame(train[160],train[y2])
+
+```
+
+
+# removing zero convariates
+
+```{r}
+   preObj<-preProcess(train2,method=c("center","scale"))
+   predict(preObj,train2)->preObj2
+   
+  nsv<-nearZeroVar(train2,saveMetrics = T)
+  nsv2<-subset(nsv,nzv=="FALSE")
+  train3<-(train[,rownames(nsv2)])
+
+  x<-0
+  for (i in 1:nrow(nsv2)){
+    x<-append(x,grep(rownames(nsv2)[i],colnames(train3)))
+  }
+  
+  # check the histgram
+  par(mfrow=c(1,2))
+  hist(preObj2[,x[14]])
+  qqnorm(preObj2[,x[14]])
+  
+  test2<-data.frame(test[y2])
+
+  
+```
+
+# Create the model "Predicting with trees"
+
+```{r}    
+cl <- makePSOCKcluster(4)
+registerDoParallel(cl)
+tic()
+
+   #folds<-createFolds(y=train2$classe,k=10,list=T,returnTrain =F)
+  trainPart <- createDataPartition(train3$classe, p=0.70, list=F)
+    trainSubset <- train3[trainPart, ]
+    validSubset <- train3[-trainPart, ] 
+    
+  modFit<-train(classe~.,data=trainSubset,method="rpart")
+  fancyRpartPlot(modFit$finalModel)
+  
+    Pred<-predict(modFit,validSubset)
+    table(Pred,validSubset$classe)
+  
+toc()
+stopCluster(cl)
+```
+
+# Create the model "Randam Forest"
+
+```{r}
+cl <- makePSOCKcluster(4)
+registerDoParallel(cl)
+tic()
+    modFit2<-train(classe~.,data=trainSubset,method="rf",prox=T)
+    modFit2
+    Pred2<-predict(modFit2,validSubset)
+    table(Pred2,validSubset$classe)
+
+toc()
+stopCluster(cl)
+```
+
+# Create the model "Boosting"
+```{r}
+
+cl <- makePSOCKcluster(4)
+registerDoParallel(cl)
+tic()
+    modFit3<-train(classe~.,data=trainSubset,method="gbm",verbose=F)
+    modFit3
+    Pred3<-predict(modFit3,validSubset)
+    table(Pred3,validSubset$classe)
+toc()
+stopCluster(cl)
+```
+
+### Conclusion
+
+ Comparied the dicision tree,randam fores, and boosting methods, the randam forest shows the best accuracy. The 52 predictors which has less than 50 % NA value in each colum was adapted for this models.
+ Therefore, it is concluded that the randam forest as used this dataset, and the prediction with test set shows below.
+
+```{r}
+ predict(modFit2,test2)
+```
+
+
+### Supplymental data
+
+No data.
+
